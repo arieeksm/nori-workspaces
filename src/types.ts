@@ -61,3 +61,23 @@ export interface NewWeeklySchedule {
   end_time: string;
   location: string | null;
 }
+
+export interface Note {
+  id: string;
+  user_id?: string;
+  title: string;
+  content: string;
+  category: Category;
+  pinned: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface NewNote {
+  title?: string;
+  content?: string;
+  category?: Category;
+  pinned?: boolean;
+}
+
+export type NotePatch = Partial<Pick<Note, "title" | "content" | "category" | "pinned">>;

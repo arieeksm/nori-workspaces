@@ -1,4 +1,4 @@
-import type { Task, WeeklySchedule } from "../types";
+import type { Note, Task, WeeklySchedule } from "../types";
 
 interface WorkspaceBackup {
   metadata: {
@@ -8,6 +8,7 @@ interface WorkspaceBackup {
   };
   tasks: Task[];
   schedules: WeeklySchedule[];
+  notes: Note[];
 }
 
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
@@ -64,7 +65,12 @@ function formatTask(task: Task): string {
 /**
  * Downloads a complete JSON backup of the current client-side workspace data.
  */
-export function exportWorkspaceAsJson(tasks: Task[], schedules: WeeklySchedule[], username?: string): void {
+export function exportWorkspaceAsJson(
+  tasks: Task[],
+  schedules: WeeklySchedule[],
+  notes: Note[] = [],
+  username?: string,
+): void {
   const exportedAt = new Date();
   const backup: WorkspaceBackup = {
     metadata: {
@@ -74,6 +80,7 @@ export function exportWorkspaceAsJson(tasks: Task[], schedules: WeeklySchedule[]
     },
     tasks,
     schedules,
+    notes,
   };
 
   downloadFile(
@@ -84,9 +91,14 @@ export function exportWorkspaceAsJson(tasks: Task[], schedules: WeeklySchedule[]
 }
 
 /**
- * Downloads a readable Markdown archive of tasks and the Monday–Sunday routine.
+ * Downloads a readable Markdown archive of tasks, notes, and the Monday–Sunday routine.
  */
-export function exportWorkspaceAsMarkdown(tasks: Task[], schedules: WeeklySchedule[], username?: string): void {
+export function exportWorkspaceAsMarkdown(
+  tasks: Task[],
+  schedules: WeeklySchedule[],
+  notes: Note[] = [],
+  username?: string,
+): void {
   const exportedAt = new Date();
   const activeTasks = tasks.filter((task) => task.status !== "done");
   const completedTasks = tasks.filter((task) => task.status === "done");
@@ -116,6 +128,23 @@ export function exportWorkspaceAsMarkdown(tasks: Task[], schedules: WeeklySchedu
   } else {
     for (const task of completedTasks) {
       lines.push(formatTask(task), "");
+    }
+  }
+
+  lines.push("## Notes", "");
+  if (notes.length === 0) {
+    lines.push("_No notes saved._", "");
+  } else {
+    for (const note of notes) {
+      const pinTag = note.pinned ? " · Pinned" : "";
+      lines.push(
+        `### ${note.title || "Untitled Note"}`,
+        "",
+        `**Category:** ${note.category}${pinTag}`,
+        "",
+        note.content.trim() || "_Empty note._",
+        "",
+      );
     }
   }
 

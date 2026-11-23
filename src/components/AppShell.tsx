@@ -1,20 +1,32 @@
 import { useState } from "react";
 import { LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { CalendarClock, ChevronDown, Download, ListTodo, Loader2, LogOut, type LucideIcon } from "lucide-react";
+import {
+  CalendarClock,
+  ChevronDown,
+  Download,
+  FileText,
+  ListTodo,
+  Loader2,
+  LogOut,
+  type LucideIcon,
+} from "lucide-react";
 import { LogoMark } from "./Logo";
 import { TasksWorkspace } from "./TasksWorkspace";
 import { ScheduleView } from "./ScheduleView";
+import { NotesWorkspace } from "./NotesWorkspace";
 import { layoutSpring } from "../lib/motion";
 import { focusRing } from "../ui";
 import { useTasks } from "../hooks/useTasks";
 import { useSchedules } from "../hooks/useSchedules";
+import { useNotes } from "../hooks/useNotes";
 import { exportWorkspaceAsJson, exportWorkspaceAsMarkdown } from "../lib/exportWorkspace";
 
-type View = "tasks" | "schedule";
+type View = "tasks" | "schedule" | "notes";
 
 const VIEWS: { value: View; label: string; icon: LucideIcon }[] = [
   { value: "tasks", label: "Tasks & Deadlines", icon: ListTodo },
   { value: "schedule", label: "Jadwal Rutin", icon: CalendarClock },
+  { value: "notes", label: "Notes", icon: FileText },
 ];
 
 interface AppShellProps {
@@ -58,7 +70,9 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const tasksData = useTasks();
   const schedulesData = useSchedules();
+  const notesData = useNotes();
   const displayIdentity = username ? `@${username}` : fullName || email;
+  const exportDisabled = tasksData.loading || schedulesData.loading || notesData.loading;
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -83,10 +97,8 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                     aria-haspopup="menu"
                     aria-expanded={exportMenuOpen}
                     onClick={() => setExportMenuOpen((open) => !open)}
-                    disabled={tasksData.loading || schedulesData.loading}
-                    title={
-                      tasksData.loading || schedulesData.loading ? "Workspace is still loading" : "Export workspace"
-                    }
+                    disabled={exportDisabled}
+                    title={exportDisabled ? "Workspace is still loading" : "Export workspace"}
                     className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden />
@@ -102,9 +114,14 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                       <button
                         type="button"
                         role="menuitem"
-                        disabled={tasksData.loading || schedulesData.loading}
+                        disabled={exportDisabled}
                         onClick={() => {
-                          exportWorkspaceAsJson(tasksData.tasks, schedulesData.blocks, username ?? undefined);
+                          exportWorkspaceAsJson(
+                            tasksData.tasks,
+                            schedulesData.blocks,
+                            notesData.notes,
+                            username ?? undefined,
+                          );
                           setExportMenuOpen(false);
                         }}
                         className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
@@ -114,9 +131,14 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                       <button
                         type="button"
                         role="menuitem"
-                        disabled={tasksData.loading || schedulesData.loading}
+                        disabled={exportDisabled}
                         onClick={() => {
-                          exportWorkspaceAsMarkdown(tasksData.tasks, schedulesData.blocks, username ?? undefined);
+                          exportWorkspaceAsMarkdown(
+                            tasksData.tasks,
+                            schedulesData.blocks,
+                            notesData.notes,
+                            username ?? undefined,
+                          );
                           setExportMenuOpen(false);
                         }}
                         className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
@@ -184,8 +206,10 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
           <main>
             {view === "tasks" ? (
               <TasksWorkspace active={view === "tasks"} tasksData={tasksData} schedulesData={schedulesData} />
-            ) : (
+            ) : view === "schedule" ? (
               <ScheduleView schedulesData={schedulesData} />
+            ) : (
+              <NotesWorkspace notesData={notesData} />
             )}
           </main>
         </div>
