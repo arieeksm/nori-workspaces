@@ -1,7 +1,7 @@
-import { forwardRef, useEffect, useMemo, useState, type FormEvent } from "react";
+import { forwardRef, useMemo, useState, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Loader2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
-import { useSchedules } from "../hooks/useSchedules";
+import type { UseSchedules } from "../hooks/useSchedules";
 import { CATEGORY_META } from "../constants";
 import { DAYS, findConflicts, sortBlocks, todayDayOfWeek, trimTime } from "../lib/schedule";
 import { errorBanner, fieldClass, focusRing, primaryButton, surface } from "../ui";
@@ -34,15 +34,11 @@ function ScheduleSkeleton() {
 interface BlockCardProps {
   block: WeeklySchedule;
   conflict: boolean;
-  liveLabel: string | null;
   onDelete: (id: string) => void;
 }
 
 /** forwardRef so AnimatePresence (popLayout) can measure the block while it exits. */
-const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
-  { block, conflict, liveLabel, onDelete },
-  ref,
-) {
+const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard({ block, conflict, onDelete }, ref) {
   const category = CATEGORY_META[block.category];
   return (
     <motion.li
@@ -55,12 +51,8 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
         layout: { type: "spring", stiffness: 520, damping: 42, mass: 0.8 },
         default: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
       }}
-      className={`group rounded-md border p-2.5 text-xs ${
-        liveLabel
-          ? "border-ink/40 bg-white ring-1 ring-ink/5"
-          : conflict
-            ? "border-amber-300 bg-white"
-            : "border-neutral-200 bg-white"
+      className={`group rounded-md border bg-white p-2.5 text-xs ${
+        conflict ? "border-amber-300" : "border-neutral-200"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -87,7 +79,6 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
       )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className={`rounded px-1.5 py-0.5 font-medium ${category.badge}`}>{category.label}</span>
-        {liveLabel && <span className="rounded bg-sunken px-1.5 py-0.5 font-medium text-ink">{liveLabel}</span>}
         {conflict && (
           <span className="inline-flex items-center gap-1 text-amber-700" title="Overlaps another block">
             <AlertTriangle className="h-3 w-3" aria-hidden />
@@ -99,8 +90,12 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
   );
 });
 
-export function ScheduleView() {
-  const { blocks, loading, error, actionError, clearActionError, refetch, addBlock, deleteBlock } = useSchedules();
+interface ScheduleViewProps {
+  schedulesData: UseSchedules;
+}
+
+export function ScheduleView({ schedulesData }: ScheduleViewProps) {
+  const { blocks, loading, error, actionError, clearActionError, refetch, addBlock, deleteBlock } = schedulesData;
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<ScheduleCategory>("kuliah");
@@ -111,35 +106,7 @@ export function ScheduleView() {
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const intervalId = window.setInterval(() => setNow(new Date()), 30_000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const today = ((now.getDay() + 6) % 7) + 1;
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const todayBlocks = useMemo(
-    () =>
-      blocks.filter((block) => block.day_of_week === today).sort((a, b) => a.start_time.localeCompare(b.start_time)),
-    [blocks, today],
-  );
-  const activeBlock =
-    todayBlocks.find((block) => {
-      const [startHour = "0", startMinute = "0"] = block.start_time.split(":");
-      const [endHour = "0", endMinute = "0"] = block.end_time.split(":");
-      const start = Number(startHour) * 60 + Number(startMinute);
-      const end = Number(endHour) * 60 + Number(endMinute);
-      return start <= nowMinutes && nowMinutes < end;
-    }) ?? null;
-  const nextBlock =
-    todayBlocks.find((block) => {
-      const [hour = "0", minute = "0"] = block.start_time.split(":");
-      return Number(hour) * 60 + Number(minute) > nowMinutes;
-    }) ?? null;
-  const liveBlockId = activeBlock?.id ?? nextBlock?.id ?? null;
-  const liveLabel = activeBlock ? "Sedang berlangsung" : nextBlock ? "Berikutnya" : null;
-
+  const today = todayDayOfWeek();
   const conflicts = useMemo(() => findConflicts(blocks), [blocks]);
   const byDay = useMemo(() => {
     const map = new Map<number, WeeklySchedule[]>(DAYS.map((d) => [d.value, []]));
@@ -347,20 +314,9 @@ export function ScheduleView() {
                     isToday ? "text-ink" : "text-neutral-500"
                   }`}
                 >
-                  <span>{d.label}</span>
+                  {d.label}
                   {isToday && (
-                    <span className="flex items-center gap-1.5">
-                      <time
-                        dateTime={now.toISOString()}
-                        className="font-mono text-[10px] tabular-nums text-neutral-500"
-                      >
-                        {new Intl.DateTimeFormat(undefined, {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }).format(now)}
-                      </time>
-                      <span className="rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-white">Hari ini</span>
-                    </span>
+                    <span className="rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-white">Hari ini</span>
                   )}
                 </h3>
                 {dayBlocks.length === 0 ? (
@@ -373,7 +329,6 @@ export function ScheduleView() {
                           key={block.id}
                           block={block}
                           conflict={conflicts.has(block.id)}
-                          liveLabel={block.id === liveBlockId ? liveLabel : null}
                           onDelete={(id) => void deleteBlock(id)}
                         />
                       ))}

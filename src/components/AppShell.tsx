@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { LayoutGroup, MotionConfig, motion } from "framer-motion";
-import { CalendarClock, ListTodo, Loader2, LogOut, type LucideIcon } from "lucide-react";
+import { CalendarClock, ChevronDown, Download, ListTodo, Loader2, LogOut, type LucideIcon } from "lucide-react";
 import { LogoMark } from "./Logo";
 import { TasksWorkspace } from "./TasksWorkspace";
 import { ScheduleView } from "./ScheduleView";
 import { layoutSpring } from "../lib/motion";
 import { focusRing } from "../ui";
+import { useTasks } from "../hooks/useTasks";
+import { useSchedules } from "../hooks/useSchedules";
+import { exportWorkspaceAsJson, exportWorkspaceAsMarkdown } from "../lib/exportWorkspace";
 
 type View = "tasks" | "schedule";
 
@@ -52,6 +55,9 @@ function EditorialFooter() {
 export function AppShell({ email, username, fullName, onSignOut }: AppShellProps) {
   const [view, setView] = useState<View>("tasks");
   const [signingOut, setSigningOut] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const tasksData = useTasks();
+  const schedulesData = useSchedules();
   const displayIdentity = username ? `@${username}` : fullName || email;
 
   async function handleSignOut() {
@@ -71,6 +77,55 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
               </div>
 
               <div className="flex items-center gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={exportMenuOpen}
+                    onClick={() => setExportMenuOpen((open) => !open)}
+                    disabled={tasksData.loading || schedulesData.loading}
+                    title={
+                      tasksData.loading || schedulesData.loading ? "Workspace is still loading" : "Export workspace"
+                    }
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden />
+                    Export
+                    <ChevronDown className="h-3 w-3" aria-hidden />
+                  </button>
+                  {exportMenuOpen && (
+                    <div
+                      role="menu"
+                      aria-label="Export workspace"
+                      className="absolute right-0 top-full z-20 mt-1 min-w-40 rounded-md border border-neutral-200 bg-paper p-1"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasksData.loading || schedulesData.loading}
+                        onClick={() => {
+                          exportWorkspaceAsJson(tasksData.tasks, schedulesData.blocks, username ?? undefined);
+                          setExportMenuOpen(false);
+                        }}
+                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
+                      >
+                        Export JSON
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={tasksData.loading || schedulesData.loading}
+                        onClick={() => {
+                          exportWorkspaceAsMarkdown(tasksData.tasks, schedulesData.blocks, username ?? undefined);
+                          setExportMenuOpen(false);
+                        }}
+                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
+                      >
+                        Export Markdown
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {displayIdentity && (
                   <span
                     className="hidden max-w-[16rem] truncate text-xs text-neutral-400 sm:inline"
@@ -126,7 +181,13 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
             </LayoutGroup>
           </header>
 
-          <main>{view === "tasks" ? <TasksWorkspace active={view === "tasks"} /> : <ScheduleView />}</main>
+          <main>
+            {view === "tasks" ? (
+              <TasksWorkspace active={view === "tasks"} tasksData={tasksData} schedulesData={schedulesData} />
+            ) : (
+              <ScheduleView schedulesData={schedulesData} />
+            )}
+          </main>
         </div>
 
         <EditorialFooter />

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, ClipboardList, RefreshCw, Search, StickyNote, X } from "lucide-react";
-import { useTasks } from "../hooks/useTasks";
-import { useSchedules } from "../hooks/useSchedules";
+import type { UseTasks } from "../hooks/useTasks";
+import type { UseSchedules } from "../hooks/useSchedules";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { TaskForm } from "./TaskForm";
 import { TaskList } from "./TaskList";
@@ -62,9 +62,11 @@ function Kbd({ children }: { children: string }) {
 interface TasksWorkspaceProps {
   /** False while another top-level view is shown; disables keyboard shortcuts. */
   active: boolean;
+  tasksData: UseTasks;
+  schedulesData: UseSchedules;
 }
 
-export function TasksWorkspace({ active }: TasksWorkspaceProps) {
+export function TasksWorkspace({ active, tasksData, schedulesData }: TasksWorkspaceProps) {
   const {
     tasks,
     loading,
@@ -76,8 +78,8 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
     updateTask,
     updateStatus,
     deleteTask,
-  } = useTasks();
-  const { blocks: scheduleBlocks } = useSchedules();
+  } = tasksData;
+  const { blocks: scheduleBlocks } = schedulesData;
 
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
