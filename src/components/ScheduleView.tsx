@@ -1,28 +1,25 @@
-import { forwardRef, useMemo, useState, type FormEvent } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, Loader2, MapPin, Plus, RefreshCw, Trash2, X } from 'lucide-react';
-import { useSchedules } from '../hooks/useSchedules';
-import { CATEGORY_META } from '../constants';
-import { DAYS, findConflicts, sortBlocks, todayDayOfWeek, trimTime } from '../lib/schedule';
-import { errorBanner, fieldClass, focusRing, primaryButton, surface } from '../ui';
-import type { ScheduleCategory, WeeklySchedule } from '../types';
-import { Select, type SelectOption } from './Select';
+import { forwardRef, useEffect, useMemo, useState, type FormEvent } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertTriangle, Loader2, MapPin, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useSchedules } from "../hooks/useSchedules";
+import { CATEGORY_META } from "../constants";
+import { DAYS, findConflicts, sortBlocks, todayDayOfWeek, trimTime } from "../lib/schedule";
+import { errorBanner, fieldClass, focusRing, primaryButton, surface } from "../ui";
+import type { ScheduleCategory, WeeklySchedule } from "../types";
+import { Select, type SelectOption } from "./Select";
 
 const field = `${fieldClass} w-full`;
 
-const CATEGORY_OPTIONS: SelectOption<ScheduleCategory>[] = (
-  ['kuliah', 'ukm'] as ScheduleCategory[]
-).map((value) => ({ value, label: CATEGORY_META[value].label }));
+const CATEGORY_OPTIONS: SelectOption<ScheduleCategory>[] = (["kuliah", "ukm"] as ScheduleCategory[]).map((value) => ({
+  value,
+  label: CATEGORY_META[value].label,
+}));
 
 const DAY_OPTIONS: SelectOption<number>[] = DAYS.map((d) => ({ value: d.value, label: d.label }));
 
 function ScheduleSkeleton() {
   return (
-    <div
-      role="status"
-      aria-label="Loading schedule"
-      className="grid gap-3 md:grid-cols-4 xl:grid-cols-7"
-    >
+    <div role="status" aria-label="Loading schedule" className="grid gap-3 md:grid-cols-4 xl:grid-cols-7">
       {DAYS.map((day, i) => (
         <div
           key={day.value}
@@ -37,12 +34,13 @@ function ScheduleSkeleton() {
 interface BlockCardProps {
   block: WeeklySchedule;
   conflict: boolean;
+  liveLabel: string | null;
   onDelete: (id: string) => void;
 }
 
 /** forwardRef so AnimatePresence (popLayout) can measure the block while it exits. */
 const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
-  { block, conflict, onDelete },
+  { block, conflict, liveLabel, onDelete },
   ref,
 ) {
   const category = CATEGORY_META[block.category];
@@ -54,11 +52,15 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, transition: { duration: 0.12 } }}
       transition={{
-        layout: { type: 'spring', stiffness: 520, damping: 42, mass: 0.8 },
+        layout: { type: "spring", stiffness: 520, damping: 42, mass: 0.8 },
         default: { duration: 0.18, ease: [0.22, 1, 0.36, 1] },
       }}
-      className={`group rounded-md border bg-white p-2.5 text-xs ${
-        conflict ? 'border-amber-300' : 'border-neutral-200'
+      className={`group rounded-md border p-2.5 text-xs ${
+        liveLabel
+          ? "border-ink/40 bg-white ring-1 ring-ink/5"
+          : conflict
+            ? "border-amber-300 bg-white"
+            : "border-neutral-200 bg-white"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -84,9 +86,8 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
         </p>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className={`rounded px-1.5 py-0.5 font-medium ${category.badge}`}>
-          {category.label}
-        </span>
+        <span className={`rounded px-1.5 py-0.5 font-medium ${category.badge}`}>{category.label}</span>
+        {liveLabel && <span className="rounded bg-sunken px-1.5 py-0.5 font-medium text-ink">{liveLabel}</span>}
         {conflict && (
           <span className="inline-flex items-center gap-1 text-amber-700" title="Overlaps another block">
             <AlertTriangle className="h-3 w-3" aria-hidden />
@@ -99,19 +100,46 @@ const BlockCard = forwardRef<HTMLLIElement, BlockCardProps>(function BlockCard(
 });
 
 export function ScheduleView() {
-  const { blocks, loading, error, actionError, clearActionError, refetch, addBlock, deleteBlock } =
-    useSchedules();
+  const { blocks, loading, error, actionError, clearActionError, refetch, addBlock, deleteBlock } = useSchedules();
 
-  const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<ScheduleCategory>('kuliah');
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState<ScheduleCategory>("kuliah");
   const [day, setDay] = useState<number>(() => todayDayOfWeek());
-  const [startTime, setStartTime] = useState('08:00');
-  const [endTime, setEndTime] = useState('09:40');
-  const [location, setLocation] = useState('');
+  const [startTime, setStartTime] = useState("08:00");
+  const [endTime, setEndTime] = useState("09:40");
+  const [location, setLocation] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const today = todayDayOfWeek();
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const today = ((now.getDay() + 6) % 7) + 1;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayBlocks = useMemo(
+    () =>
+      blocks.filter((block) => block.day_of_week === today).sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [blocks, today],
+  );
+  const activeBlock =
+    todayBlocks.find((block) => {
+      const [startHour = "0", startMinute = "0"] = block.start_time.split(":");
+      const [endHour = "0", endMinute = "0"] = block.end_time.split(":");
+      const start = Number(startHour) * 60 + Number(startMinute);
+      const end = Number(endHour) * 60 + Number(endMinute);
+      return start <= nowMinutes && nowMinutes < end;
+    }) ?? null;
+  const nextBlock =
+    todayBlocks.find((block) => {
+      const [hour = "0", minute = "0"] = block.start_time.split(":");
+      return Number(hour) * 60 + Number(minute) > nowMinutes;
+    }) ?? null;
+  const liveBlockId = activeBlock?.id ?? nextBlock?.id ?? null;
+  const liveLabel = activeBlock ? "Sedang berlangsung" : nextBlock ? "Berikutnya" : null;
+
   const conflicts = useMemo(() => findConflicts(blocks), [blocks]);
   const byDay = useMemo(() => {
     const map = new Map<number, WeeklySchedule[]>(DAYS.map((d) => [d.value, []]));
@@ -127,11 +155,11 @@ export function ScheduleView() {
     if (!trimmed || submitting) return;
 
     if (!startTime || !endTime) {
-      setFormError('Please set both a start and an end time.');
+      setFormError("Please set both a start and an end time.");
       return;
     }
     if (endTime <= startTime) {
-      setFormError('End time must be after the start time.');
+      setFormError("End time must be after the start time.");
       return;
     }
 
@@ -143,14 +171,14 @@ export function ScheduleView() {
       day_of_week: day,
       start_time: startTime,
       end_time: endTime,
-      location: location.trim() === '' ? null : location.trim(),
+      location: location.trim() === "" ? null : location.trim(),
     });
     setSubmitting(false);
 
     if (ok) {
       // Keep day/time/category so recurring blocks of the same pattern are quick to enter.
-      setTitle('');
-      setLocation('');
+      setTitle("");
+      setLocation("");
     }
   }
 
@@ -158,9 +186,7 @@ export function ScheduleView() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-ink">Jadwal Rutin</h2>
-        <p className="mt-1 text-sm text-neutral-500">
-          Fixed weekly classes and UKM meetings, Senin to Minggu.
-        </p>
+        <p className="mt-1 text-sm text-neutral-500">Fixed weekly classes and UKM meetings, Senin to Minggu.</p>
       </div>
 
       <form
@@ -195,13 +221,7 @@ export function ScheduleView() {
         <label className="sr-only" htmlFor="sched-day">
           Day of week
         </label>
-        <Select
-          id="sched-day"
-          value={day}
-          onChange={setDay}
-          options={DAY_OPTIONS}
-          className={field}
-        />
+        <Select id="sched-day" value={day} onChange={setDay} options={DAY_OPTIONS} className={field} />
 
         <label className="sr-only" htmlFor="sched-start">
           Start time
@@ -241,7 +261,7 @@ export function ScheduleView() {
 
         <button
           type="submit"
-          disabled={title.trim() === '' || submitting}
+          disabled={title.trim() === "" || submitting}
           className={`${primaryButton} sm:col-span-2 lg:col-span-1`}
         >
           {submitting ? (
@@ -265,7 +285,7 @@ export function ScheduleView() {
             key="schedule-error"
             role="alert"
             initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
+            animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
@@ -319,18 +339,27 @@ export function ScheduleView() {
               <section
                 key={d.value}
                 aria-labelledby={`day-${d.value}`}
-                className={`min-w-0 rounded-lg p-2 ${isToday ? 'bg-sunken' : 'bg-neutral-50'}`}
+                className={`min-w-0 rounded-lg p-2 ${isToday ? "bg-sunken" : "bg-neutral-50"}`}
               >
                 <h3
                   id={`day-${d.value}`}
                   className={`mb-2 flex items-center justify-between px-1 text-xs font-medium ${
-                    isToday ? 'text-ink' : 'text-neutral-500'
+                    isToday ? "text-ink" : "text-neutral-500"
                   }`}
                 >
-                  {d.label}
+                  <span>{d.label}</span>
                   {isToday && (
-                    <span className="rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-white">
-                      Hari ini
+                    <span className="flex items-center gap-1.5">
+                      <time
+                        dateTime={now.toISOString()}
+                        className="font-mono text-[10px] tabular-nums text-neutral-500"
+                      >
+                        {new Intl.DateTimeFormat(undefined, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }).format(now)}
+                      </time>
+                      <span className="rounded bg-ink px-1.5 py-0.5 text-[10px] font-medium text-white">Hari ini</span>
                     </span>
                   )}
                 </h3>
@@ -344,6 +373,7 @@ export function ScheduleView() {
                           key={block.id}
                           block={block}
                           conflict={conflicts.has(block.id)}
+                          liveLabel={block.id === liveBlockId ? liveLabel : null}
                           onDelete={(id) => void deleteBlock(id)}
                         />
                       ))}

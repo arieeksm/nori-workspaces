@@ -1,16 +1,42 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { AlertTriangle, ClipboardList, RefreshCw, StickyNote, X } from 'lucide-react';
-import { useTasks } from '../hooks/useTasks';
-import { useMediaQuery } from '../hooks/useMediaQuery';
-import { TaskForm } from './TaskForm';
-import { CategoryTabs } from './CategoryTabs';
-import { TaskList } from './TaskList';
-import { TaskDetailPanel } from './TaskDetailPanel';
-import { groupTasksByDueDate } from '../lib/dates';
-import { panelSpring } from '../lib/motion';
-import { errorBanner, focusRing } from '../ui';
-import type { CategoryFilter, Task } from '../types';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertTriangle, ClipboardList, RefreshCw, StickyNote, X } from "lucide-react";
+import { useTasks } from "../hooks/useTasks";
+import { useSchedules } from "../hooks/useSchedules";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { TaskForm } from "./TaskForm";
+import { CategoryTabs } from "./CategoryTabs";
+import { TaskList } from "./TaskList";
+import { TaskDetailPanel } from "./TaskDetailPanel";
+import { groupTasksByDueDate } from "../lib/dates";
+import { panelSpring } from "../lib/motion";
+import { errorBanner, focusRing } from "../ui";
+import type { CategoryFilter, Task } from "../types";
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatClock(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function formatBriefingDate(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
+function timeToMinutes(value: string): number {
+  const [hours = "0", minutes = "0"] = value.split(":");
+  return Number(hours) * 60 + Number(minutes);
+}
 
 function LoadingSkeleton() {
   return (
@@ -52,20 +78,62 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
     updateStatus,
     deleteTask,
   } = useTasks();
+  const { blocks: scheduleBlocks } = useSchedules();
 
-  const [filter, setFilter] = useState<CategoryFilter>('all');
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(new Date()), 30_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const [filter, setFilter] = useState<CategoryFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   // lg and up: split view with a sticky right column. Below: a slide-over drawer.
-  const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
 
-  const selectedTask = useMemo(
-    () => tasks.find((t) => t.id === selectedId) ?? null,
-    [tasks, selectedId],
+  const todayKey = localDateKey(now);
+  const todayDayOfWeek = ((now.getDay() + 6) % 7) + 1;
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const todayBlocks = useMemo(
+    () =>
+      scheduleBlocks
+        .filter((block) => block.day_of_week === todayDayOfWeek)
+        .sort((a, b) => a.start_time.localeCompare(b.start_time)),
+    [scheduleBlocks, todayDayOfWeek],
+  );
+  const activeRoutine =
+    todayBlocks.find(
+      (block) => timeToMinutes(block.start_time) <= nowMinutes && nowMinutes < timeToMinutes(block.end_time),
+    ) ?? null;
+  const nextRoutine = todayBlocks.find((block) => timeToMinutes(block.start_time) > nowMinutes) ?? null;
+
+  const dueTodayCount = tasks.filter((task) => task.status !== "done" && task.due_date === todayKey).length;
+  const overdueCount = tasks.filter(
+    (task) => task.status !== "done" && task.due_date !== null && task.due_date < todayKey,
+  ).length;
+  const highPriorityTasks = useMemo(
+    () =>
+      tasks
+        .filter((task) => task.status !== "done" && task.priority === "high")
+        .sort((a, b) => {
+          if (a.due_date === null && b.due_date !== null) return 1;
+          if (a.due_date !== null && b.due_date === null) return -1;
+          if (a.due_date && b.due_date) {
+            const dueDateOrder = a.due_date.localeCompare(b.due_date);
+            if (dueDateOrder !== 0) return dueDateOrder;
+          }
+          return a.created_at.localeCompare(b.created_at);
+        })
+        .slice(0, 2),
+    [tasks],
   );
 
+  const selectedTask = useMemo(() => tasks.find((t) => t.id === selectedId) ?? null, [tasks, selectedId]);
+
   const visibleTasks = useMemo(
-    () => (filter === 'all' ? tasks : tasks.filter((t) => t.category === filter)),
+    () => (filter === "all" ? tasks : tasks.filter((t) => t.category === filter)),
     [tasks, filter],
   );
 
@@ -76,12 +144,12 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
   );
 
   const counts = useMemo<Record<CategoryFilter, number>>(() => {
-    const open = tasks.filter((t) => t.status !== 'done');
+    const open = tasks.filter((t) => t.status !== "done");
     return {
       all: open.length,
-      kuliah: open.filter((t) => t.category === 'kuliah').length,
-      ukm: open.filter((t) => t.category === 'ukm').length,
-      personal: open.filter((t) => t.category === 'personal').length,
+      kuliah: open.filter((t) => t.category === "kuliah").length,
+      ukm: open.filter((t) => t.category === "ukm").length,
+      personal: open.filter((t) => t.category === "personal").length,
     };
   }, [tasks]);
 
@@ -105,18 +173,14 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
       const el = event.target as HTMLElement | null;
       const tag = el?.tagName;
       // The custom Select is a button with role="combobox"; treat it like a form field.
-      const isCombobox = el?.getAttribute('role') === 'combobox';
+      const isCombobox = el?.getAttribute("role") === "combobox";
       const typing =
-        tag === 'INPUT' ||
-        tag === 'TEXTAREA' ||
-        tag === 'SELECT' ||
-        isCombobox ||
-        Boolean(el?.isContentEditable);
+        tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || isCombobox || Boolean(el?.isContentEditable);
 
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         if (el === titleInputRef.current) {
           titleInputRef.current?.blur();
-        } else if (selectedId && el?.getAttribute('aria-expanded') !== 'true') {
+        } else if (selectedId && el?.getAttribute("aria-expanded") !== "true") {
           setSelectedId(null);
         }
         return;
@@ -124,22 +188,19 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
 
       if (typing) return;
 
-      if (event.key === 'n') {
+      if (event.key === "n") {
         event.preventDefault();
         titleInputRef.current?.focus();
-      } else if ((event.key === 'j' || event.key === 'k') && orderedIds.length > 0) {
+      } else if ((event.key === "j" || event.key === "k") && orderedIds.length > 0) {
         event.preventDefault();
         const index = selectedId ? orderedIds.indexOf(selectedId) : -1;
-        const nextIndex =
-          event.key === 'j'
-            ? Math.min(index + 1, orderedIds.length - 1)
-            : Math.max(index - 1, 0);
+        const nextIndex = event.key === "j" ? Math.min(index + 1, orderedIds.length - 1) : Math.max(index - 1, 0);
         setSelectedId(orderedIds[nextIndex]);
       }
     }
 
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [active, selectedId, orderedIds]);
 
   /** The panel itself. Re-keyed per task so switching tasks cross-fades and resets drafts. */
@@ -152,12 +213,7 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
       >
-        <TaskDetailPanel
-          task={task}
-          onClose={closePanel}
-          onUpdate={updateTask}
-          onDelete={handleDelete}
-        />
+        <TaskDetailPanel task={task} onClose={closePanel} onUpdate={updateTask} onDelete={handleDelete} />
       </motion.div>
     );
   }
@@ -166,6 +222,77 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_30rem]">
       {/* Left: quick add, filters, list */}
       <div className="min-w-0 space-y-4">
+        <section aria-label="Today's briefing" className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+                Today&apos;s briefing
+              </p>
+              <h2 className="mt-1 text-sm font-semibold capitalize text-ink">{formatBriefingDate(now)}</h2>
+            </div>
+            <time dateTime={now.toISOString()} className="shrink-0 font-mono text-xs tabular-nums text-neutral-500">
+              {formatClock(now)}
+            </time>
+          </div>
+
+          <div className="mt-3 grid gap-3 border-t border-neutral-100 pt-3 sm:grid-cols-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Routine</p>
+              {activeRoutine ? (
+                <p className="mt-1 truncate text-sm text-ink">
+                  <span className="font-medium">{activeRoutine.title}</span>
+                  <span className="ml-2 text-xs tabular-nums text-neutral-500">
+                    {activeRoutine.start_time.slice(0, 5)}–{activeRoutine.end_time.slice(0, 5)}
+                  </span>
+                  <span className="ml-2 text-[11px] text-emerald-700">Ongoing</span>
+                </p>
+              ) : nextRoutine ? (
+                <p className="mt-1 truncate text-sm text-ink">
+                  <span className="font-medium">{nextRoutine.title}</span>
+                  <span className="ml-2 text-xs tabular-nums text-neutral-500">
+                    at {nextRoutine.start_time.slice(0, 5)}
+                  </span>
+                  <span className="ml-2 text-[11px] text-neutral-500">Up next</span>
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-neutral-500">No more routines scheduled today</p>
+              )}
+            </div>
+
+            <div className="min-w-0">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">Task deadlines</p>
+              <p className="mt-1 text-sm text-ink">
+                <span className="font-semibold tabular-nums">{dueTodayCount}</span>
+                <span className="ml-1 text-neutral-500">due today</span>
+                <span className="mx-2 text-neutral-300" aria-hidden>
+                  ·
+                </span>
+                <span className="font-semibold tabular-nums">{overdueCount}</span>
+                <span className="ml-1 text-neutral-500">overdue</span>
+              </p>
+            </div>
+          </div>
+
+          {highPriorityTasks.length > 0 && (
+            <div className="mt-3 border-t border-neutral-100 pt-3">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">High priority</p>
+              <ul className="mt-1 space-y-1">
+                {highPriorityTasks.map((task) => (
+                  <li key={task.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(task.id)}
+                      className={`block max-w-full truncate text-left text-sm text-ink underline decoration-neutral-300 underline-offset-2 transition hover:decoration-ink ${focusRing}`}
+                    >
+                      {task.title}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
         <TaskForm activeFilter={filter} onAdd={addTask} inputRef={titleInputRef} />
 
         <AnimatePresence initial={false}>
@@ -174,7 +301,7 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
               key="action-error"
               role="alert"
               initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
+              animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.18 }}
               className="overflow-hidden"
@@ -228,9 +355,7 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
               className="flex flex-col items-center gap-2 px-6 py-16 text-center"
             >
               <ClipboardList className="h-6 w-6 text-neutral-300" aria-hidden />
-              <p className="text-sm font-medium text-ink">
-                {filter === 'all' ? 'No tasks yet' : 'Nothing here yet'}
-              </p>
+              <p className="text-sm font-medium text-ink">{filter === "all" ? "No tasks yet" : "Nothing here yet"}</p>
               <p className="text-sm text-neutral-500">Add your first task above to get started.</p>
             </motion.div>
           ) : (
@@ -252,10 +377,7 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
 
       {/* Right (desktop): sticky side-peek column. Panel and placeholder cross-fade/slide. */}
       {isDesktop && (
-        <aside
-          aria-label="Task details"
-          className="sticky top-6 h-[calc(100vh-3rem)] self-start"
-        >
+        <aside aria-label="Task details" className="sticky top-6 h-[calc(100vh-3rem)] self-start">
           <AnimatePresence initial={false}>
             {selectedTask ? (
               <motion.div
@@ -279,9 +401,7 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
               >
                 <StickyNote className="h-6 w-6 text-neutral-300" aria-hidden />
                 <p className="text-sm font-medium text-neutral-600">Select a task</p>
-                <p className="text-sm text-neutral-400">
-                  Edit its details, write notes and build a checklist here.
-                </p>
+                <p className="text-sm text-neutral-400">Edit its details, write notes and build a checklist here.</p>
               </motion.div>
             )}
           </AnimatePresence>
@@ -308,9 +428,9 @@ export function TasksWorkspace({ active }: TasksWorkspaceProps) {
               key="drawer"
               aria-label="Task details"
               className="fixed inset-y-0 right-0 z-40 w-full max-w-md bg-white shadow-[0_0_24px_rgba(0,0,0,0.1)]"
-              initial={{ x: '100%' }}
+              initial={{ x: "100%" }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
+              exit={{ x: "100%" }}
               transition={panelSpring}
             >
               {renderPanel(selectedTask)}
