@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  ::selection {
+    background: rgba(31, 31, 31, 0.14);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.18) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.15);
+    border: 3px solid transparent;
+    border-radius: 9999px;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.28);
+    background-clip: content-box;
+  }
+}
+
+@layer utilities {
+  /* Plays every time a hidden view becomes visible again (display: none -> block). */
+  .view-enter {
+    animation: view-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@keyframes view-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view-enter {
+    animation: none;
+  }
+}
