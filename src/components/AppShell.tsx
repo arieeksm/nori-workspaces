@@ -67,7 +67,7 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2.5">
                 <LogoMark size={28} title="" className="shrink-0" />
-                <h1 className="text-[17px] font-semibold tracking-tight text-ink">Notion-Rival</h1>
+                <h1 className="text-[17px] font-semibold tracking-tight text-ink">NoRi Workspaces</h1>
               </div>
 
               <div className="flex items-center gap-2">

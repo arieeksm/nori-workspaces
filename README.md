@@ -1,6 +1,6 @@
-# NoRi (Notion-Rival)
+# NoRi Workspaces
 
-**NoRi** is a calm, distraction-free personal task, deadline, and weekly routine schedule workspace built with a flat editorial light aesthetic. Originally conceived as a single-user productivity tool, it evolved into a secure, invite-only multi-tenant web application with strict row-level data isolation.
+**NoRi Workspaces** is a calm, distraction-free personal task, deadline, and weekly routine schedule workspace built with a flat editorial light aesthetic. Originally conceived as a single-user productivity tool, it evolved into a secure, invite-only multi-tenant web application with strict row-level data isolation.
 
 ---
 

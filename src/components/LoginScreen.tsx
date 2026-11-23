@@ -64,7 +64,7 @@ export function LoginScreen({ onSignIn, onEnterDemo }: LoginScreenProps) {
         <div className="w-full max-w-sm">
           <div className="mb-8 flex flex-col items-center text-center">
             <LogoMark size={40} title="" />
-            <h1 className="mt-5 text-xl font-semibold tracking-tight text-ink">Sign in to Notion-Rival</h1>
+            <h1 className="mt-5 text-xl font-semibold tracking-tight text-ink">Sign in to NoRi Workspaces</h1>
             <p className="mt-1.5 text-sm text-neutral-500">This workspace is private.</p>
           </div>
 
