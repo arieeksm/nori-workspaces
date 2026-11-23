@@ -1,23 +1,11 @@
-import { useId } from 'react';
+import { useId } from "react";
 
-/**
- * ─── HOW TO SWAP IN YOUR OWN LOGO ────────────────────────────────────────────
- * 1. Set LOGO_VIEWBOX to the viewBox of your SVG (for example "0 0 24 24").
- * 2. Replace the content of <LogoArt /> below with your own <path>/<rect>/<circle>
- *    elements. Use `currentColor` to inherit the surrounding text color, or
- *    `url(#${gradientId})` to use the brand fill.
- * 3. Optional: change BRAND_FROM / BRAND_TO. They are equal by default, which gives a flat
- *    charcoal tile; set two different colors for a gradient. Delete the tile <rect> to show
- *    your art without a background.
- * Everything else (sizing, accessibility, gradient ids) is handled by <LogoMark />.
- * ──────────────────────────────────────────────────────────────────────────────
- */
-export const LOGO_VIEWBOX = '0 0 32 32';
-const BRAND_FROM = '#1F1F1F';
-const BRAND_TO = '#1F1F1F';
+export const LOGO_VIEWBOX = "0 0 32 32";
+const BRAND_FROM = "#1F1F1F";
+const BRAND_TO = "#1F1F1F";
 
 /** Geometric "N": two stems joined by a diagonal. */
-const MARK_PATH = 'M10.5 22V10L21.5 22V10';
+const MARK_PATH = "M10.5 22V10L21.5 22V10";
 
 function LogoArt({ gradientId }: { gradientId: string }) {
   return (
@@ -25,14 +13,7 @@ function LogoArt({ gradientId }: { gradientId: string }) {
       {/* Tile */}
       <rect width="32" height="32" rx="8" fill={`url(#${gradientId})`} />
       {/* Mark */}
-      <path
-        d={MARK_PATH}
-        fill="none"
-        stroke="white"
-        strokeWidth="2.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <path d={MARK_PATH} fill="none" stroke="white" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
     </>
   );
 }
@@ -45,9 +26,9 @@ interface LogoMarkProps {
   title?: string;
 }
 
-export function LogoMark({ size = 32, className, title = 'Notion-Rival' }: LogoMarkProps) {
+export function LogoMark({ size = 32, className, title = "NoRi Workspaces" }: LogoMarkProps) {
   const gradientId = useId();
-  const decorative = title === '';
+  const decorative = title === "";
 
   return (
     <svg
@@ -55,7 +36,7 @@ export function LogoMark({ size = 32, className, title = 'Notion-Rival' }: LogoM
       height={size}
       viewBox={LOGO_VIEWBOX}
       className={className}
-      role={decorative ? 'presentation' : 'img'}
+      role={decorative ? "presentation" : "img"}
       aria-hidden={decorative ? true : undefined}
       aria-label={decorative ? undefined : title}
       xmlns="http://www.w3.org/2000/svg"
