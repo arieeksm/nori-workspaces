@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { LayoutGroup, MotionConfig, motion } from "framer-motion";
 import {
   CalendarClock,
   CheckCircle2,
   ChevronDown,
+  Command,
   Download,
   FileText,
   ListTodo,
@@ -18,6 +19,7 @@ import { LogoMark } from "./Logo";
 import { TasksWorkspace } from "./TasksWorkspace";
 import { ScheduleView } from "./ScheduleView";
 import { NotesWorkspace } from "./NotesWorkspace";
+import { CommandPalette, type PaletteAction } from "./CommandPalette";
 import { layoutSpring } from "../lib/motion";
 import { focusRing } from "../ui";
 import { useTasks } from "../hooks/useTasks";
@@ -78,6 +80,7 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
   const [view, setView] = useState<View>("tasks");
   const [signingOut, setSigningOut] = useState(false);
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Import / Restore state
@@ -92,6 +95,18 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
   const notesData = useNotes();
   const displayIdentity = username ? `@${username}` : fullName || email;
   const exportDisabled = tasksData.loading || schedulesData.loading || notesData.loading;
+
+  // Global Cmd/Ctrl + K shortcut for Command Palette
+  useEffect(() => {
+    function onGlobalKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((prev) => !prev);
+      }
+    }
+    window.addEventListener("keydown", onGlobalKeyDown);
+    return () => window.removeEventListener("keydown", onGlobalKeyDown);
+  }, []);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -135,7 +150,6 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
       });
       setRestoreSummary(summary);
       setPendingBackup(null);
-      // Reload workspace cleanly so all hooks reflect restored rows
       window.setTimeout(() => {
         window.location.reload();
       }, 1400);
@@ -143,6 +157,25 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
       setImportError(err instanceof Error ? err.message : "Gagal memulihkan data backup.");
     } finally {
       setRestoring(false);
+    }
+  }
+
+  function handlePaletteAction(action: PaletteAction) {
+    if (action.type === "navigate") {
+      setView(action.view);
+      return;
+    }
+    if (action.type === "create_note") {
+      setView("notes");
+      void notesData.createNote({
+        title: "Untitled Note",
+        content: "",
+        category: "personal",
+      });
+      return;
+    }
+    if (action.type === "export_json" && !exportDisabled) {
+      exportWorkspaceAsJson(tasksData.tasks, schedulesData.blocks, notesData.notes, username ?? undefined);
     }
   }
 
@@ -158,6 +191,17 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPaletteOpen(true)}
+                  title="Quick search & commands (Ctrl+K)"
+                  className={`inline-flex items-center gap-1.5 rounded-md border border-neutral-200/90 bg-white px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
+                >
+                  <Command className="h-3.5 w-3.5" aria-hidden />
+                  <span className="hidden sm:inline">Search</span>
+                  <kbd className="rounded bg-sunken px-1 py-0.2 font-mono text-[10px] text-neutral-400">Ctrl K</kbd>
+                </button>
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -173,9 +217,8 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                     aria-haspopup="menu"
                     aria-expanded={exportMenuOpen}
                     onClick={() => setExportMenuOpen((open) => !open)}
-                    disabled={exportDisabled}
-                    title={exportDisabled ? "Workspace is still loading" : "Backup & restore workspace"}
-                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${focusRing}`}
+                    title="Backup & restore workspace"
+                    className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-neutral-500 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
                   >
                     <Download className="h-3.5 w-3.5" aria-hidden />
                     Backup
@@ -200,7 +243,7 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                           );
                           setExportMenuOpen(false);
                         }}
-                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
+                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
                       >
                         Export JSON
                       </button>
@@ -217,7 +260,7 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                           );
                           setExportMenuOpen(false);
                         }}
-                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink ${focusRing}`}
+                        className={`block w-full rounded px-3 py-2 text-left text-xs text-neutral-600 transition-colors hover:bg-sunken hover:text-ink disabled:cursor-not-allowed disabled:opacity-40 ${focusRing}`}
                       >
                         Export Markdown
                       </button>
@@ -225,7 +268,6 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
                       <button
                         type="button"
                         role="menuitem"
-                        disabled={exportDisabled}
                         onClick={() => {
                           setExportMenuOpen(false);
                           fileInputRef.current?.click();
@@ -336,6 +378,16 @@ export function AppShell({ email, username, fullName, onSignOut }: AppShellProps
         </div>
 
         <EditorialFooter />
+
+        {/* Command Palette (Ctrl/Cmd + K) */}
+        <CommandPalette
+          open={paletteOpen}
+          onClose={() => setPaletteOpen(false)}
+          tasks={tasksData.tasks}
+          schedules={schedulesData.blocks}
+          notes={notesData.notes}
+          onExecute={handlePaletteAction}
+        />
 
         {/* Restore Confirmation Modal */}
         {pendingBackup && (
